@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Moderator Interface</title>
+    <!-- Bootstrap CSS -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="container">
+      <h1 class="mt-5 mb-4">Moderator Interface</h1>
+      <div id="jokeContainer" class="mb-4"></div>
+      <select id="typeSelect" class="form-select mb-3">
+        <!-- Placeholder for joke types -->
+      </select>
+      <button id="approveBtn" class="btn btn-success me-2">Approve</button>
+      <button id="rejectBtn" class="btn btn-danger">Reject</button>
+      <button id="deleteBtn" class="btn btn-secondary">Delete</button>
+    </div>
+
+    <!-- Bootstrap JS (optional) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+      // Your JavaScript logic here
+      async function fetchJokeForModeration() {
+        try {
+          const response = await fetch("/mod");
+          if (response.ok) {
+            const joke = await response.json();
+            displayJoke(joke);
+            fetchJokeTypes(); // Fetch joke types after fetching a new joke
+          } else {
+            displayNoJokesAvailable();
+          }
+        } catch (error) {
+          console.error("Error fetching joke for moderation:", error);
+        }
+      }
+
+      async function fetchJokeTypes() {
+        try {
+          const response = await fetch("/types");
+          if (response.ok) {
+            const types = await response.json();
+            displayJokeTypes(types);
+          }
+        } catch (error) {
+          console.error("Error fetching joke types:", error);
+        }
+      }
+
+      function displayJoke(joke) {
+        const jokeContainer = document.getElementById("jokeContainer");
+        jokeContainer.innerHTML = `
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Joke for Moderation</h5>
+                        <p class="card-text"><strong>Setup:</strong> ${joke.setup}</p>
+                        <p class="card-text"><strong>Punchline:</strong> ${joke.punchline}</p>
+                        <p class="card-text"><strong>Type:</strong> ${joke.type}</p>
+                    </div>
+                </div>
+            `;
+      }
+
+      function displayJokeTypes(types) {
+        const typeSelect = document.getElementById("typeSelect");
+        typeSelect.innerHTML = "";
+        types.forEach((type) => {
+          const option = document.createElement("option");
+          option.textContent = type;
+          typeSelect.appendChild(option);
+        });
+      }
+
+      function displayNoJokesAvailable() {
+        const jokeContainer = document.getElementById("jokeContainer");
+        jokeContainer.innerHTML = "<p>No jokes available for moderation</p>";
+      }
+
+      document
+        .getElementById("approveBtn")
+        .addEventListener("click", async () => {
+          await submitModeratedJoke();
+        });
+
+      document
+        .getElementById("rejectBtn")
+        .addEventListener("click", async () => {
+          await deleteModeratedJoke();
+        });
+
+      document
+        .getElementById("deleteBtn")
+        .addEventListener("click", async () => {
+          await deleteModeratedJoke();
+        });
+
+      document
+        .getElementById("approveBtn")
+        .addEventListener("click", async () => {
+          // Send request to server to approve the joke
+          await fetch("/approve", { method: "POST" });
+          // Fetch next joke for moderation
+          fetchJokeForModeration();
+        });
+
+      document
+        .getElementById("rejectBtn")
+        .addEventListener("click", async () => {
+          // Send request to server to delete the joke
+          await fetch("/delete", { method: "POST" });
+          // Fetch next joke for moderation
+          fetchJokeForModeration();
+        });
+
+      // Fetch the first joke for moderation when the page loads
+      fetchJokeForModeration();
+    </script>
+  </body>
+</html>

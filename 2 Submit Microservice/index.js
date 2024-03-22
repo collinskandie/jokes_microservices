@@ -1,132 +1,163 @@
 // Import required modules
 const express = require("express");
 const bodyParser = require("body-parser");
+const mysql = require("mysql2");
+const fs = require("fs");
+const path = require("path");
+const amqp = require("amqplib");
+const swaggerJsdoc = require("swagger-jsdoc");
+const swaggerUi = require("swagger-ui-express");
 
 // Create Express app
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
+app.use(express.static("public"));
 app.use(bodyParser.json());
 
-// Placeholder for joke types
-let jokeTypes = [];
+const connection = mysql.createConnection({
+  host: "localhost",
+  user: "root",
+  password: "root",
+  database: "jokes_db",
+});
 
-// Endpoint for submitting jokes
-app.post("/submit", (req, res) => {
-  const { joke } = req.body;
-  if (!joke) {
-    return res.status(400).json({ error: "Joke is required" });
+connection.connect((err) => {
+  if (err) {
+    console.error("Error connecting to MySQL database:", err);
+    return;
   }
-  // Push the joke to RabbitMQ for further processing
-  // Implement RabbitMQ logic here
-  jokeTypes.push(joke);
-  res.status(200).json({ message: "Joke submitted successfully" });
+  console.log("Connected to MySQL database");
 });
 
-// Endpoint for retrieving joke types
-app.get("/types", (req, res) => {
-  res.status(200).json(jokeTypes);
-});
+let channel; // RabbitMQ channel
 
-// Endpoint for OpenAPI documentation
-app.get("/docs", (req, res) => {
-  // Implement OpenAPI documentation here
-  const openapiSpec = {
+async function connectRabbitMQ() {
+  try {
+    const connection = await amqp.connect("amqp://localhost");
+    channel = await connection.createChannel();
+    console.log("Connected to RabbitMQ");
+  } catch (error) {
+    console.error("Error connecting to RabbitMQ:", error);
+  }
+}
+
+connectRabbitMQ();
+
+const options = {
+  definition: {
     openapi: "3.0.0",
     info: {
       title: "Joke API",
       version: "1.0.0",
       description: "API for submitting and retrieving jokes",
     },
-    paths: {
-      "/submit": {
-        post: {
-          summary: "Submit a joke",
-          requestBody: {
-            required: true,
-            content: {
-              "application/json": {
-                schema: {
-                  type: "object",
-                  properties: {
-                    joke: {
-                      type: "string",
-                    },
-                  },
-                  required: ["joke"],
-                },
-              },
-            },
-          },
-          responses: {
-            200: {
-              description: "Joke submitted successfully",
-            },
-            400: {
-              description: "Bad request",
-              content: {
-                "application/json": {
-                  schema: {
-                    type: "object",
-                    properties: {
-                      error: {
-                        type: "string",
-                      },
-                    },
-                    required: ["error"],
-                  },
-                },
-              },
-            },
-          },
-        },
+    servers: [
+      {
+        url: `http://localhost:${PORT}`,
+        description: "Local server",
       },
-      "/types": {
-        get: {
-          summary: "Retrieve joke types",
-          responses: {
-            200: {
-              description: "OK",
-              content: {
-                "application/json": {
-                  schema: {
-                    type: "array",
-                    items: {
-                      type: "string",
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-      "/docs": {
-        get: {
-          summary: "OpenAPI documentation",
-          responses: {
-            200: {
-              description: "OK",
-              content: {
-                "text/html": {
-                  schema: {
-                    type: "string",
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-  };
+    ],
+  },
+  apis: ["./index.js"], // Path to the API routes file(s)
+};
 
-  //   app.get("/openapi.json", (req, res) => {
-  //     res.status(200).json(openapiSpec);
-  //   });
+const specs = swaggerJsdoc(options);
+app.use("/docs", swaggerUi.serve, swaggerUi.setup(specs));
 
-  res.status(200).send("OpenAPI documentation", openapiSpec);
+/**
+ * @openapi
+ * /submit:
+ *   post:
+ *     summary: Submit a joke
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               jokeType:
+ *                 type: string
+ *               setup:
+ *                 type: string
+ *               punchline:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Joke submitted successfully
+ *       400:
+ *         description: Bad request
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ */
+
+app.post("/submit", async (req, res) => {
+  const { jokeType, setup, punchline } = req.body;
+  if (!jokeType || !setup || !punchline) {
+    return res
+      .status(400)
+      .json({ error: "Joke type, setup, and punchline are required" });
+  }
+
+  try {
+    // Publish the joke to RabbitMQ for further processing
+    await channel.assertQueue("submittedJokes", { durable: false });
+    await channel.sendToQueue(
+      "submittedJokes",
+      Buffer.from(JSON.stringify({ jokeType, setup, punchline }))
+    );
+    console.log("Joke submitted to RabbitMQ:", { jokeType, setup, punchline });
+
+    res.status(200).json({ message: "Joke submitted successfully" });
+  } catch (error) {
+    console.error("Error submitting joke to RabbitMQ:", error);
+    res.status(500).json({ error: "Failed to submit joke" });
+  }
+});
+
+/**
+ * @openapi
+ * /types:
+ *   get:
+ *     summary: Retrieve joke types
+ *     responses:
+ *       200:
+ *         description: OK
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: string
+ */
+app.get("/types", (req, res) => {
+  // Logic to retrieve joke types from MySQL database
+  connection.query("SELECT DISTINCT type FROM jokes", (err, results) => {
+    if (err) {
+      console.error("Error querying joke types:", err);
+      // Read joke types from backup file if available
+      const backupFilePath = path.join(__dirname, "backup", "jokeTypes.json");
+      if (fs.existsSync(backupFilePath)) {
+        const backupData = fs.readFileSync(backupFilePath, "utf8");
+        const types = JSON.parse(backupData);
+        return res.json(types);
+      } else {
+        return res.status(500).send("Failed to retrieve joke types");
+      }
+    }
+    // Extract the types from the query results and return as JSON response
+    const types = results.map((row) => row.type);
+    // Save types to backup file
+    const backupFilePath = path.join(__dirname, "backup", "jokeTypes.json");
+    fs.writeFileSync(backupFilePath, JSON.stringify(types), "utf8");
+    res.json(types);
+  });
 });
 
 // Start the server

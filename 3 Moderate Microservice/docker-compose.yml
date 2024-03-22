@@ -1,0 +1,15 @@
+version: "3"
+
+services:
+  moderate:
+    build: .
+    ports:
+      - "3003:3003" # Map port 3000 on the host to port 3000 in the container
+    depends_on:
+      - rabbitmq
+
+  rabbitmq:
+    image: rabbitmq:latest
+    ports:
+      - "5672:5672" # RabbitMQ default port
+      - "15672:15672" # RabbitMQ management UI port

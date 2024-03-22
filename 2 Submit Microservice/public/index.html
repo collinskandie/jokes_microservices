@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Submit Joke</title>
+    <!-- Bootstrap CSS -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="container mt-5">
+      <h1 class="mb-4">Submit Joke</h1>
+      <form id="submitJokeForm">
+        <div class="mb-3">
+          <label for="jokeTypeDropdown" class="form-label"
+            >Select Joke Type:</label
+          >
+          <select id="jokeTypesDropdown" class="form-select">
+            <!-- Joke types will be populated dynamically -->
+          </select>
+        </div>
+        <div class="mb-3">
+          <label for="jokeSetupInput" class="form-label">Enter Setup:</label>
+          <input
+            type="text"
+            class="form-control"
+            id="jokeSetupInput"
+            required
+          />
+        </div>
+        <div class="mb-3">
+          <label for="jokePunchlineInput" class="form-label"
+            >Enter Punchline:</label
+          >
+          <input
+            type="text"
+            class="form-control"
+            id="jokePunchlineInput"
+            required
+          />
+        </div>
+        <button type="submit" class="btn btn-primary">Submit Joke</button>
+      </form>
+    </div>
+    <!-- Bootstrap JS and dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.min.js"></script>
+    <!-- Custom JavaScript -->
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        fetch("/types")
+          .then((response) => response.json())
+          .then((data) => {
+            // Populate dropdown menu with fetched joke types
+            const dropdown = document.getElementById("jokeTypesDropdown");
+            data.forEach((jokeType) => {
+              const option = document.createElement("option");
+              option.value = jokeType;
+              option.textContent = jokeType;
+              dropdown.appendChild(option);
+            });
+          })
+          .catch((error) => console.error("Error fetching joke types:", error));
+      });
+
+      document.addEventListener("DOMContentLoaded", function () {
+        // Add event listener to form submission
+        document
+          .getElementById("submitJokeForm")
+          .addEventListener("submit", function (event) {
+            event.preventDefault(); // Prevent default form submission
+
+            // Get form input values
+            const jokeType = document.getElementById("jokeTypesDropdown").value;
+            const jokeSetup = document.getElementById("jokeSetupInput").value;
+            const jokePunchline =
+              document.getElementById("jokePunchlineInput").value;
+
+            // Send joke submission request to server
+            fetch("/submit", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                jokeType,
+                setup: jokeSetup,
+                punchline: jokePunchline,
+              }),
+            })
+              .then((response) => response.json())
+              .then((data) => {
+                // Display success message
+                alert(data.message);
+                // Reset form inputs
+                document.getElementById("jokeSetupInput").value = "";
+                document.getElementById("jokePunchlineInput").value = "";
+              })
+              .catch((error) => console.error("Error submitting joke:", error));
+          });
+      });
+    </script>
+  </body>
+</html>
