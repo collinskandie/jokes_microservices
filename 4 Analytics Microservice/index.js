@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 3003;
 app.use(bodyParser.json());
 
 // Connect to MongoDB
-mongoose.connect("mongodb://mongo:27017/analytics_db", {
+mongoose.connect("mongodb://localhost:27017/analytics_db", {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 });
