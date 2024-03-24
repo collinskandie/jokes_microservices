@@ -18,7 +18,7 @@ let submittedJokes = []; // Placeholder for submitted jokes
 const connection = mysql.createConnection({
   host: "localhost",
   user: "root",
-
+  password: "root",
   database: "jokes_db",
 });
 
