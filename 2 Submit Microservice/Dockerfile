@@ -13,4 +13,4 @@ EXPOSE 3001
 CMD ["node", "index.js"]
 
 VOLUME /app/data 
-# store joke types persistently in a volume
+
